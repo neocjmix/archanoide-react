@@ -146,13 +146,10 @@ jobs:
               });
               
               // 서브이슈로 설정
-              const linkIssuesMutation = `
-                mutation($parentId:ID!, $childId:ID!) {
-                  createLinkedBranch(input: {
-                    issueId: $childId,
-                    parentIssueId: $parentId
-                  }) {
-                    linkedBranch {
+              const getIssueIdQuery = `
+                query($owner:String!, $repo:String!, $number:Int!) {
+                  repository(owner:$owner, name:$repo) {
+                    issue(number:$number) {
                       id
                     }
                   }
@@ -160,12 +157,30 @@ jobs:
               `;
               
               try {
-                await github.graphql(linkIssuesMutation, {
-                  parentId: `I_kwDOLXXXXX${parentIssueNumber}`,
-                  childId: `I_kwDOLXXXXX${createSubIssue.data.number}`
+                // 부모 이슈 ID 조회
+                const parentIssueResult = await github.graphql(getIssueIdQuery, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  number: parentIssueNumber
                 });
+                
+                // 자식 이슈 ID 조회
+                const childIssueResult = await github.graphql(getIssueIdQuery, {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  number: createSubIssue.data.number
+                });
+
+                // REST API를 통해 서브이슈 연결
+                await github.rest.issues.addSubissue({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: parentIssueNumber,
+                  sub_issue_id: createSubIssue.data.number
+                });
+                
               } catch (error) {
-                console.log('Failed to link issues:', error);
+                console.log('서브이슈 연결 실패:', error);
                 // 실패해도 계속 진행
               }
             }
